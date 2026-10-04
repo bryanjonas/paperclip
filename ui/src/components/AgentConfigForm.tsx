@@ -1,4 +1,5 @@
 import { AiConnectionField } from "./ai-connections/AiConnectionField";
+import { OpenCodeGoApiKeyField } from "./ai-connections/OpenCodeGoApiKeyField";
 import { aiConnectionBindingSchema } from "@paperclipai/shared";
 import { testAgentSetup } from "@/lib/test-agent-setup";
 import { setupEfforts } from "../lib/agent-setup-fields";
@@ -763,6 +764,27 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       ...buildAgentUpdatePatch(props.agent, nextOverlay),
       applyStoredClaudeLogin: true,
     });
+    invalidateUserSecretDefinitions();
+  };
+
+  const handleOpenCodeGoKeySave = async (binding: EnvBinding) => {
+    if (isCreate || !selectedCompanyId) return;
+    const flushedEnv = flushEnvironmentDraft();
+    const baseEnv = flushedEnv
+      ?? (eff("adapterConfig", "env", (config.env ?? EMPTY_ENV) as Record<string, EnvBinding>));
+    const nextOverlay: AgentConfigOverlay = {
+      ...overlay,
+      adapterConfig: {
+        ...overlay.adapterConfig,
+        env: { ...baseEnv, OPENCODE_API_KEY: binding },
+      },
+      runtime: {
+        ...overlay.runtime,
+        runtimeConfig: { ...runtimeConfig, aiConnection: null },
+      },
+    };
+    setOverlay(nextOverlay);
+    await props.onSave(buildAgentUpdatePatch(props.agent, nextOverlay));
     invalidateUserSecretDefinitions();
   };
 
@@ -1658,6 +1680,11 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
             </Field>
           )}
 
+          {!isCreate && selectedCompanyId && (adapterType === "opencode_local" || adapterType === "pi_local") && <OpenCodeGoApiKeyField
+            companyId={selectedCompanyId}
+            configured={Boolean(((eff("adapterConfig", "env", config.env ?? EMPTY_ENV) ?? {}) as Record<string, unknown>).OPENCODE_API_KEY)}
+            onSave={handleOpenCodeGoKeySave}
+          />}
           {!isCreate && selectedCompanyId && <AiConnectionField companyId={selectedCompanyId} agentId={props.agent.id} agentName={props.agent.name} adapterType={adapterType === "paperclip_runner" ? eff("adapterConfig", "provider", config.provider) === "codex" ? "codex_local" : eff("adapterConfig", "provider", config.provider) === "opencode" ? "opencode_local" : eff("adapterConfig", "provider", config.provider) === "acpx" && eff("adapterConfig", "acpxAgent", config.acpxAgent) === "grok" ? "grok_local" : eff("adapterConfig", "provider", config.provider) === "acpx" && eff("adapterConfig", "acpxAgent", config.acpxAgent) === "claude" ? "claude_local" : adapterType : adapterType}
             value={aiConnectionBindingSchema.safeParse((overlay.runtime.runtimeConfig as Record<string, unknown> | undefined)?.aiConnection ?? runtimeConfig.aiConnection).data}
             model={String(eff("adapterConfig", "model", config.model) ?? "")} environmentId={currentDefaultEnvironmentId || undefined} legacy

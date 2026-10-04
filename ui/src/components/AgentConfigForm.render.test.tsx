@@ -784,6 +784,13 @@ describe("AgentConfigForm environment selector", () => {
     expect(result.onSave.mock.calls[0][0].adapterConfig.effort).toBeUndefined();
   });
 
+  it.each(["pi_local", "opencode_local"])("offers an OpenCode Go key for existing %s agents", async (adapterType) => {
+    const result = await renderForm([], { adapterType, adapterConfig: { model: "opencode-go/mimo-v2.6-pro" } });
+    roots.push(result.root);
+    expect(result.container.querySelector('[aria-label="OpenCode Go API key"]')).toBeTruthy();
+    expect(result.container.textContent).toContain("OPENCODE_API_KEY");
+  });
+
   it("saves Grok 4.7 reasoning effort using the runtime key", async () => {
     const result = await renderForm([], { adapterType: "grok_local", adapterConfig: { model: "grok-4.7", reasoningEffort: "high" } });
     roots.push(result.root);
