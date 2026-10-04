@@ -44,6 +44,8 @@ export function setupEfforts(adapter: string, model = ""): string[] {
 }
 
 export const SETUP_LOGIN_HINTS: Record<string, string> = {
+  opencode_local:
+    "Use an API key or provider credentials from opencode auth / subscription (e.g. OpenCode Go, OpenRouter, or direct providers).",
   cursor:
     "Use a Cursor API key, or run agent login on the selected environment's host.",
   gemini_local:

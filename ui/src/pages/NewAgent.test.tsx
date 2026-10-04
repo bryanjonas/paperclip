@@ -379,6 +379,13 @@ describe("New agent setup", () => {
     await render("opencode_local");
     expect(container.querySelector('[aria-label="Thinking effort"]')).toBeNull();
   });
+  it("does not require an OpenRouter binding for OpenCode", async () => {
+    await render("opencode_local");
+    expect(container.textContent).toContain("OpenCode Go");
+    await fill("Model", "opencode-go/mimo-v2.6-pro");
+    await click("Finish setup");
+    expect(api.hire.mock.calls[0][1].runtimeConfig).not.toHaveProperty("aiConnection");
+  });
   it("restores confirmation on refresh without hiring again", async () => {
     api.get.mockResolvedValue({
       id: "saved-agent",
