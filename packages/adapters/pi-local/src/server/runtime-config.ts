@@ -10,6 +10,25 @@ type PreparedPiRuntimeConfig = {
   cleanup: () => Promise<void>;
 };
 
+export function buildOpenCodeGoPiProviderConfig(modelId: string): string {
+  return JSON.stringify({
+    "opencode-go": {
+      baseUrl: "https://opencode.ai/zen/go/v1",
+      apiKey: "{env:OPENCODE_API_KEY}",
+      api: "openai-completions",
+      models: [{
+        id: modelId,
+        name: modelId,
+        reasoning: true,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 200000,
+        maxTokens: 32000,
+      }],
+    },
+  });
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

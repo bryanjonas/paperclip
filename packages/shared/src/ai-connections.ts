@@ -30,6 +30,7 @@ export const AI_PROVIDERS = [
   "anthropic",
   "openai",
   "openrouter",
+  "opencode_go",
   "xai",
 ] as const;
 export const aiProviderSchema = z.enum(AI_PROVIDERS);
@@ -100,6 +101,12 @@ export const AI_CONNECTION_CAPABILITIES: Record<
       api_key: { adapters: ["opencode_local"], envKey: "OPENROUTER_API_KEY" },
     },
   },
+  opencode_go: {
+    name: "OpenCode Go",
+    methods: {
+      api_key: { adapters: ["opencode_local", "pi_local"], envKey: "OPENCODE_API_KEY" },
+    },
+  },
   xai: {
     name: "Grok",
     methods: {
@@ -134,7 +141,9 @@ export function isAiConnectionCompatible(
   return (
     candidates.some((method) => method?.adapters.includes(adapterType)) &&
     (requirement.provider !== "openrouter" ||
-      (typeof model === "string" && model.startsWith("openrouter/")))
+      (typeof model === "string" && model.startsWith("openrouter/"))) &&
+    (requirement.provider !== "opencode_go" || model === undefined ||
+      (typeof model === "string" && model.startsWith("opencode-go/")))
   );
 }
 export type AiConnectionUnavailableReason =

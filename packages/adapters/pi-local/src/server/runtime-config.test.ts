@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { preparePiRuntimeConfig } from "./runtime-config.js";
+import { buildOpenCodeGoPiProviderConfig, preparePiRuntimeConfig } from "./runtime-config.js";
 
 const cleanupPaths = new Set<string>();
 
@@ -22,6 +22,25 @@ async function readModelsJson(agentConfigDir: string): Promise<Record<string, un
 }
 
 describe("preparePiRuntimeConfig", () => {
+  it("builds a native Pi provider entry for an OpenCode Go model", async () => {
+    const providers = JSON.parse(buildOpenCodeGoPiProviderConfig("kimi-k3")) as Record<string, any>;
+    expect(providers["opencode-go"]).toMatchObject({
+      baseUrl: "https://opencode.ai/zen/go/v1",
+      apiKey: "{env:OPENCODE_API_KEY}",
+      api: "openai-completions",
+      models: [{ id: "kimi-k3", name: "kimi-k3" }],
+    });
+    const prepared = await preparePiRuntimeConfig({
+      env: {
+        OPENCODE_API_KEY: "test-key",
+        PAPERCLIP_PI_PROVIDERS: buildOpenCodeGoPiProviderConfig("kimi-k3"),
+      },
+    });
+    const written = await readModelsJson(prepared.agentConfigDir!);
+    expect((written.providers as Record<string, any>)["opencode-go"].apiKey).toBe("test-key");
+    await prepared.cleanup();
+  });
+
   it("is a no-op when PAPERCLIP_PI_PROVIDERS is unset", async () => {
     const prepared = await preparePiRuntimeConfig({ env: { FOO: "bar" } });
 

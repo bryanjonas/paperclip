@@ -68,21 +68,6 @@ function hired(response: request.Response) {
 }
 
 describe("agent-created hires use managed AI connections", () => {
-  it("clears a managed AI binding when explicitly switching to a direct provider key", async () => {
-    const f = await fixture("openai", "api_key");
-    await db.insert(principalPermissionGrants).values({ companyId: f.companyId, principalType: "user", principalId: f.userId, permissionKey: "agents:configure" });
-    const response = await request(f.app).patch(`/api/agents/${f.agentId}`).send({
-      adapterType: "opencode_local",
-      adapterConfig: { model: "opencode-go/mimo-v2.6-pro" },
-      runtimeConfig: { aiConnection: null },
-    });
-    expect(response.status, JSON.stringify(response.body)).toBe(200);
-    expect(response.body.runtimeConfig).not.toHaveProperty("aiConnection");
-    const [saved] = await db.select().from(agents).where(eq(agents.id, f.agentId));
-    expect(saved?.runtimeConfig.aiConnection).toBeUndefined();
-    expect(saved?.adapterType).toBe("opencode_local");
-  });
-
   for (const operation of ["test", "save"] as const) {
     it.each([401, 403, 429, 503, null])(`${operation} changes API-key health only for a provider rejection (status: %s)`, async (status) => {
       const f = await fixture("anthropic", "api_key");

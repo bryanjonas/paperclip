@@ -141,6 +141,7 @@ export async function validateAiApiKey(
     anthropic: "https://api.anthropic.com/v1/models?limit=1",
     openai: "https://api.openai.com/v1/models",
     openrouter: "https://openrouter.ai/api/v1/key",
+    opencode_go: "https://opencode.ai/zen/go/v1/models",
     xai: "https://api.x.ai/v1/models",
   };
   let response: Response;

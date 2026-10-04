@@ -14,6 +14,7 @@ import { AiConnectionLegacyNotice } from "./AiConnectionManagement";
 import { AiConnectionCredentialStep } from "./AiConnectionCredentialStep";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ export function aiProviderForAdapter(
       claude_local: "anthropic",
       codex_local: "openai",
       opencode_local: "openrouter",
+      pi_local: "opencode_go",
       grok_local: "xai",
     } as Record<string, AiProvider>
   )[adapterType];
@@ -58,7 +60,10 @@ export function AiConnectionField({
   legacy?: boolean;
   readOnly?: boolean;
 }) {
-  const provider = aiProviderForAdapter(adapterType);
+  const adapterProvider = aiProviderForAdapter(adapterType);
+  const provider = adapterType === "opencode_local" && value?.provider === "opencode_go"
+    ? "opencode_go"
+    : adapterProvider;
   const returnFocus = useRef<HTMLElement | null>(null);
   const restoreFocus = (event: Event) => { event.preventDefault(); returnFocus.current?.focus(); };
   const [adopting, setAdopting] = useState(false);
@@ -78,30 +83,32 @@ export function AiConnectionField({
     enabled: Boolean(provider),
   });
   const personalDefault = accounts.data?.connections.find((account) => account.provider === provider && account.isDefault && account.ownership === "personal" && account.ownerUserId === accounts.data.currentUserId);
-  const selectDefault = useMutation({
-    mutationFn: async (result: NonNullable<typeof savedAccount>) => {
+    const selectDefault = useMutation({
+      mutationFn: async (result: NonNullable<typeof savedAccount>) => {
       // Reconnect retains the existing default and its access. A new account
       // must be selected explicitly before a responsible-user binding uses it.
-      if (!reconnecting) await aiConnectionsApi.setDefault(companyId, result.grantId);
+      if (!reconnecting && provider !== "opencode_go") await aiConnectionsApi.setDefault(companyId, result.grantId);
       return result;
     },
     onSuccess: async (result) => {
       await client.invalidateQueries({ queryKey: ["ai-connections", companyId] });
-      changeBinding({ provider: provider!, method: result.method, mode: "responsible_user" });
+      changeBinding(provider === "opencode_go"
+        ? { provider, method: result.method, mode: "shared", connectionId: result.connectionId, grantId: result.grantId }
+        : { provider: provider!, method: result.method, mode: "responsible_user" });
       setConnecting(false);
     },
   });
   const openConnection = (reconnect?: AiManagedConnectionSummary) => {
     returnFocus.current = document.activeElement as HTMLElement;
     setReconnecting(reconnect);
-    setAllAgents(accounts.data?.canManageConnections ?? false);
+    setAllAgents(provider === "opencode_go" || (accounts.data?.canManageConnections ?? false));
     setSavedAccount(undefined);
     selectDefault.reset();
     setConnecting(true);
   };
   const method: AiAuthMethod = (value?.mode !== "responsible_user" ? value?.method : undefined)
     ?? accounts.data?.connections.find((account) => account.provider === provider && account.isDefault)?.method
-    ?? (provider === "openrouter" ? "api_key" : "subscription");
+     ?? (provider === "openrouter" || provider === "opencode_go" ? "api_key" : "subscription");
   if (!provider) return null;
   if (legacy && !value && !adopting)
     return (
@@ -112,6 +119,26 @@ export function AiConnectionField({
     );
   return (
     <div className="space-y-4">
+      {adapterType === "opencode_local" && (
+        <label className="block space-y-2 text-xs text-muted-foreground">
+          Provider
+          <Select
+            value={provider === "opencode_go" ? "opencode_go" : "openrouter"}
+            onValueChange={(selected) => onChange({
+              provider: selected === "opencode_go" ? "opencode_go" : "openrouter",
+              method: "api_key",
+              mode: "responsible_user",
+            })}
+            disabled={readOnly}
+          >
+            <SelectTrigger aria-label="AI provider"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="openrouter">OpenRouter</SelectItem>
+              <SelectItem value="opencode_go">OpenCode Go</SelectItem>
+            </SelectContent>
+          </Select>
+        </label>
+      )}
       {value && (adapterType !== "opencode_local" || Boolean(model)) && !isAiConnectionCompatible(value, adapterType, model) && (
         <p role="alert" className="text-sm text-destructive">
           This connection does not support the current harness and model. Choose
@@ -203,10 +230,10 @@ export function AiConnectionField({
             initialMethod={reconnecting?.method ?? method}
             fixedMethod={Boolean(reconnecting)}
             connectionId={reconnecting?.id}
-            name={reconnecting?.name ?? `My ${provider === "anthropic" ? "Claude" : provider === "openai" ? "OpenAI" : provider === "xai" ? "Grok" : "OpenRouter"} ${method === "subscription" ? "subscription" : "API"}`}
-            ownership="personal"
+            name={reconnecting?.name ?? `My ${provider === "anthropic" ? "Claude" : provider === "openai" ? "OpenAI" : provider === "xai" ? "Grok" : provider === "opencode_go" ? "OpenCode Go" : "OpenRouter"} ${method === "subscription" ? "subscription" : "API"}`}
+            ownership={provider === "opencode_go" ? "shared" : "personal"}
             agentIds={agentId ? [agentId] : []}
-            allAgents={allAgents}
+            allAgents={provider === "opencode_go" || allAgents}
             environmentId={environmentId}
             onCancel={() => setConnecting(false)}
             onComplete={(result) => {

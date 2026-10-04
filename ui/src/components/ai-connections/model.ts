@@ -18,6 +18,7 @@ export const AI_PROVIDERS: Record<
     logo: "/brands/codex-color.svg",
   },
   openrouter: { name: "OpenRouter", logo: "/brands/apps/openrouter.svg" },
+  opencode_go: { name: "OpenCode Go", logo: "/brands/adapters/opencode.svg" },
   xai: {
     name: "Grok",
     subscriptionName: "Grok subscription",

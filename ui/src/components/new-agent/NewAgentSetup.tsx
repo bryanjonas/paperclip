@@ -213,7 +213,7 @@ function Setup({
   });
   const models = useQuery({
     queryKey: queryKeys.agents.adapterModels(companyId, brandType, null, aiBinding?.provider),
-    queryFn: () => agentsApi.adapterModels(companyId, brandType, { provider: aiBinding?.provider }),
+    queryFn: () => agentsApi.adapterModels(companyId, brandType, { provider: aiBinding?.provider, aiConnection: aiBinding }),
     enabled: Boolean(brandType) && showModel,
     retry: false,
   });

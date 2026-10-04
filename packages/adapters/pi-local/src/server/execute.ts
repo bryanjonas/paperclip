@@ -56,7 +56,7 @@ import {
 import { shellQuote } from "@paperclipai/adapter-utils/ssh";
 import { isPiUnknownSessionError, parsePiJsonl } from "./parse.js";
 import { ensurePiModelConfiguredAndAvailable } from "./models.js";
-import { preparePiRuntimeConfig } from "./runtime-config.js";
+import { buildOpenCodeGoPiProviderConfig, preparePiRuntimeConfig } from "./runtime-config.js";
 import { SANDBOX_INSTALL_COMMAND } from "../index.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -333,6 +333,11 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   // Materialize custom Pi providers (PAPERCLIP_PI_PROVIDERS) into a managed
   // PI_CODING_AGENT_DIR before runtimeEnv is computed, so both local validation
   // and the spawned Pi process resolve models against the managed models.json.
+  // OpenCode Go is OpenAI-compatible, but Pi has its own provider registry; map
+  // the selected model into that registry while retaining Paperclip's managed key.
+  if (provider === "opencode-go" && env.OPENCODE_API_KEY && modelId) {
+    env.PAPERCLIP_PI_PROVIDERS = buildOpenCodeGoPiProviderConfig(modelId);
+  }
   const preparedRuntimeConfig = await preparePiRuntimeConfig({ env });
   const localAgentConfigDir = preparedRuntimeConfig.agentConfigDir ?? "";
   if (localAgentConfigDir) {

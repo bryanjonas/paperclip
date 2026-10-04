@@ -226,12 +226,17 @@ export const agentsApi = {
   adapterModels: (
     companyId: string,
     type: string,
-    options?: { refresh?: boolean; environmentId?: string | null; provider?: string },
+    options?: { refresh?: boolean; environmentId?: string | null; provider?: string; aiConnection?: import("@paperclipai/shared").AiConnectionBinding; agentId?: string },
   ) => {
     const params = new URLSearchParams();
     if (options?.refresh) params.set("refresh", "1");
     if (options?.provider) params.set("provider", options.provider);
     if (options?.environmentId) params.set("environmentId", options.environmentId);
+    if (options?.agentId) params.set("agentId", options.agentId);
+    if (options?.aiConnection?.mode === "shared") {
+      params.set("connectionId", options.aiConnection.connectionId);
+      params.set("grantId", options.aiConnection.grantId);
+    }
     const query = params.size > 0 ? `?${params.toString()}` : "";
     return api.get<AdapterModel[]>(
       `/companies/${encodeURIComponent(companyId)}/adapters/${encodeURIComponent(type)}/models${query}`,

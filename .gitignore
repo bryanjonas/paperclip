@@ -58,6 +58,7 @@ diagnostics/
 
 # Doc maintenance cursor
 .doc-review-cursor
+/doc/VM-DEPLOYMENT.md
 
 # Playwright
 tests/e2e/test-results/

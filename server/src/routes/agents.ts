@@ -4,8 +4,9 @@ import { agentFileStore, agentFileTokenFromHash } from "../services/agent-file-s
 import { pipeline } from "node:stream/promises";
 import { resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
 import { listOpenRouterModels } from "../services/openrouter-models.js";
+import { listOpenCodeGoModels } from "../services/opencode-go-models.js";
 import { prepareManagedAiRuntime, assertManagedAiProjectAuth, stripAiAuthBindings } from "../services/ai-connection-runtime.js";
-import { ADAPTER_AUTH_MISSING_CHECK_CODE, AI_CONNECTION_CAPABILITIES, aiConnectionBindingSchema, type AiConnectionBinding } from "@paperclipai/shared";
+import { ADAPTER_AUTH_MISSING_CHECK_CODE, AI_CONNECTION_CAPABILITIES, aiConnectionBindingSchema, type AiConnectionBinding, type AiProvider } from "@paperclipai/shared";
 import { toolConnections } from "@paperclipai/db";
 import { aiConnectionService } from "../services/ai-connections.js";
 import { defaultAiConnectionForHire } from "../services/agent-ai-connection-default.js";
@@ -21,6 +22,7 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import type { ChatChannelService } from "../services/chat-channels.js";
 import { activityLog, agents as agentsTable, chatConversations, companies, heartbeatRuns, issues as issuesTable, projects as projectsTable } from "@paperclipai/db";
@@ -3251,6 +3253,30 @@ export function agentRoutes(
       return;
     }
     const provider = asNonEmptyString(req.query.provider);
+    if ((type === "opencode_local" || type === "pi_local") && provider === "opencode_go") {
+      const connectionId = z.string().uuid().safeParse(req.query.connectionId);
+      const grantId = z.string().uuid().safeParse(req.query.grantId);
+      const agentId = req.query.agentId === undefined ? null : z.string().uuid().safeParse(req.query.agentId);
+      if (!connectionId.success || !grantId.success || (agentId !== null && !agentId.success))
+        throw unprocessable("Select a connected OpenCode Go account to load its models");
+      const binding: AiConnectionBinding = {
+        provider: "opencode_go", method: "api_key", mode: "shared",
+        connectionId: connectionId.data, grantId: grantId.data,
+      };
+      const allowUninstalledShared = agentId === null && await canInstallSharedAiConnectionForNewAgent(db, req, companyId, binding);
+      const selected = await aiConnectionService(db).select({
+        companyId,
+        userId: responsibleUserForAiRequest(req),
+        agentId: agentId?.data ?? "",
+        adapterType: type,
+        binding,
+        allowUninstalledShared,
+      });
+      const apiKey = await aiConnectionService(db).credential(selected);
+      res.setHeader("Cache-Control", "no-store");
+      res.json(await listOpenCodeGoModels(apiKey, refresh));
+      return;
+    }
     if (type === "opencode_local" && provider === "openrouter") {
       res.json(await listOpenRouterModels(refresh));
       return;
@@ -3367,7 +3393,7 @@ export function agentRoutes(
       return result;
     }
     if (!result.checks.some(check => check.code.includes("hello_probe"))) {
-      const providerAdapter = { anthropic: "claude_local", openai: "codex_local", openrouter: "opencode_local", xai: "grok_local" }[binding.provider];
+      const providerAdapter = ({ anthropic: "claude_local", openai: "codex_local", openrouter: "opencode_local", opencode_go: "opencode_local", xai: "grok_local" } satisfies Record<AiProvider, string>)[binding.provider];
       const probe = await requireServerAdapter(providerAdapter).testEnvironment({ ...context, adapterType: providerAdapter, config: { ...context.config, engine: "cli" } });
       result.checks.push(...probe.checks);
       result.status = probe.status === "fail" ? "fail" : result.status === "warn" || probe.status === "warn" ? "warn" : "pass";
@@ -5559,11 +5585,8 @@ export function agentRoutes(
         adapterConfig: patchData.adapterConfig,
       });
     }
-    const explicitlyClearsAiConnection = requestedRuntimeConfig?.aiConnection === null;
-    if (existing.runtimeConfig.aiConnection && requestedRuntimeConfig && !hasOwn(requestedRuntimeConfig, "aiConnection")) requestedRuntimeConfig.aiConnection = existing.runtimeConfig.aiConnection;
-    const nextAiBinding = explicitlyClearsAiConnection
-      ? undefined
-      : aiConnectionBindingSchema.safeParse(requestedRuntimeConfig?.aiConnection ?? existing.runtimeConfig.aiConnection).data;
+    if (existing.runtimeConfig.aiConnection && requestedRuntimeConfig && !requestedRuntimeConfig.aiConnection) requestedRuntimeConfig.aiConnection = existing.runtimeConfig.aiConnection;
+    const nextAiBinding = aiConnectionBindingSchema.safeParse(requestedRuntimeConfig?.aiConnection ?? existing.runtimeConfig.aiConnection).data;
     if (nextAiBinding) {
       await assertCanUpdateAgent(req, existing);
       const changed = JSON.stringify(nextAiBinding) !== JSON.stringify(existing.runtimeConfig.aiConnection);
@@ -5571,10 +5594,7 @@ export function agentRoutes(
       if (!isAiConnectionCompatible(nextAiBinding, requestedAdapterType, aiConfig.model, aiConfig.provider, aiConfig.acpxAgent)) throw unprocessable("Select an AI connection compatible with the new harness and model");
       if (changed) await validateManagedAgentBinding(req, existing.companyId, existing.id, requestedAdapterType, aiConfig, nextAiBinding, (patchData.defaultEnvironmentId !== undefined ? patchData.defaultEnvironmentId : existing.defaultEnvironmentId) as string | null, true);
     }
-    if (requestedRuntimeConfig) {
-      if (explicitlyClearsAiConnection) delete requestedRuntimeConfig.aiConnection;
-      patchData.runtimeConfig = requestedRuntimeConfig;
-    }
+    if (requestedRuntimeConfig) patchData.runtimeConfig = requestedRuntimeConfig;
     if (touchesAdapterConfiguration || Object.prototype.hasOwnProperty.call(patchData, "defaultEnvironmentId")) {
       await assertAgentDefaultEnvironmentSelection(
         existing.companyId,
